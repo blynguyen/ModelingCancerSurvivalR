@@ -1,0 +1,108 @@
+---
+title: "432Assign2"
+author: "Brian Nguyen"
+output: pdf
+---
+install.packages("KMsurv")
+install.packages("km.ci")
+install.packages("survival")
+
+
+
+library("survival")
+library("KMsurv")
+library("km.ci")
+
+##Estimates the survival function and generates the standard error at one and five years after transplants in patients with aneuploid tumors
+library("KMsurv");data("tongue") ##creates the table Tongue for problem 1
+colnames(tongue) = c("Ploidy", "Time", "Status")
+tonguefit = survfit(Surv(Time,Status)~1, data=tongue[tongue$Ploidy==1,])   ##creates a survfit of only the aneuploid entries
+matrix(round(c(tonguefit$surv[c(14,44)], (tonguefit$std.err*tonguefit$surv)[
+    c(14,44)]),4), ncol=2, dimnames=list(c("1yr","5yr"),c("Surv","SE"))) ## at place 4 the week amount is approximately 52 (1 year), at place 44 the week amount is approximately 260 (5 years)
+##generates:
+#     Surv     SE
+# 1yr 0.6538 0.0660
+# 5yr 0.2289 0.0954
+
+
+##Estimates cumulative hazard rate (H(t)) and finds its standard error at 5 years. Also estimates the survival function at 5 years through exp(H(t))
+round(c(NelsAal = cumsum(tonguefit$n.ev/tonguefit$n.risk)[44], lgKM = 
+    -log(tonguefit$surv[44]), SE = tonguefit$std.err[44]),5)
+##NelsAal    lgKM      SE 
+##1.39191 1.47464 0.41687 
+
+## The first is the estimation of the cumulative hazard rate, the third is the standard error of that hazard rate, the second can be applied in the following manner:
+## S(260) = exp(-1.47464), to give us our predicted survival rate at 260 weeks
+
+##Finds a linear 95% conf interval for survival function at 5 yrs
+tonguefit$surv[44]*(1 + 1.96*c(-1,1)*tonguefit$std.err[44])
+## generates [1] 0.04186772 0.41585645 (linear conf interval)
+
+##Finds a log-transformed 95% conf interval for survival function at 5 yrs
+tonguefit$surv[44]^exp(1.96*c(-1,1)*tonguefit$std.err[44]/
+          log(tonguefit$surv[44]))
+##generates [1] 0.0768148 0.4285579 (log-trans conf interval)
+
+##Finds a arcsine-square root 95% conf interval for survival function at 5 yrs
+sin(asin(sqrt(tonguefit$surv[44]))+0.5*1.96*c(-1,1)*
+       tonguefit$std.err[44]*sqrt(1/(1/tonguefit$surv[44]-1)))^2
+##generates [1] 0.07440148 0.43616222 (arcsin conf interval)
+
+##Below a log transformation is used to find a 95% EP confidence band for the survival function from three to six years
+aLU = 1/(1+1/(52*tonguefit$std.err[c(41,45)])) ##generates aL and aU (.94, .956) respectively
+## thus the c constant for EP conf. band is:
+2.9029-((.96-.956)/.02)*.0534-((.94-.6)/.02)*(.0095) = 2.7302
+
+##below is the log transform and the confidence intervals between 3 and 6 years (descending )
+
+for(i in 41:45) cat(round(tonguefit$surv[i]^exp(2.7302*c(-1,1)*
+      tonguefit$std.err[i]/log(tonguefit$surv[i])),5), "\n")
+
+## generates 
+## 0.09342 0.55195 (3 years)
+## 0.04115 0.50584 
+## 0.04115 0.50584 
+## 0.04115 0.50584 
+## 0.04115 0.50584 (8 years, closest approx to 6)
+
+##Below a log transformation is used to find a 95% Hall-Wellner confidence band for the survival function from three to six years
+1.4696 - ((.94-.6)/.02)*(0.0197) ##generates k constant 1.1347
+
+##below is the log transform and the confidence intervals between 3 and 6 years (descending )
+
+for (i in 41:45) cat(round(tonguefit$surv[i]^exp((1.1347*c(-1,1)*(1+54*(tonguefit$std.err[i])^2))/((sqrt(54))*log(tonguefit$surv[i]))), 5), "\n")
+
+##generates 
+## 0.07793 0.57576 (3 years)
+## 0.0126 0.60828 
+## 0.0126 0.60828 
+## 0.0126 0.60828 
+## 0.0126 0.60828  (8 years, closest apprx to 6)
+
+##Estimates the restricted mean survival time at 400 weeks and provides a 95% confidence interval
+print(tonguefit, print.rmean=TRUE)
+
+##Call: survfit(formula = Surv(Time, Status) ~ 1, data = tongue[tongue$Ploidy == 
+##    1, ])
+##       n     events     *rmean *se(rmean)     median    0.95LCL    0.95UCL 
+##      52.0       31.0      146.6       27.7       93.0       67.0         NA 
+##    * restricted mean with upper limit =  400 
+## so to calculate the conf.inf for rmean (rmean-(27.7*1.96), rmean+(27.7*1.96)) i.e (92.4, 200.9)
+
+##Estimates a median time to death as well as estimates a 95% linear confidence interval
+##calculate the confinf 
+    (tonguefit$surv[30] + c(-1,1)*1.96*tonguefit$std.err[30]*tonguefit$surv[30]) ##linear confidence interval
+
+## above command generates [1] 0.3352694 0.6207233
+## these roughly correspond to the times of 67 and 157 so the confidence interval is (67, 157)
+
+
+##Plots the estimated survival function above
+plot(tonguefit,lwd=1,col=c("black","red","red"),cex.lab=1.3,cex.axis=1, conf.int = F, xlab = "Time", ylab = "Survival probability") ## with no conf interval
+##Plots a 95% arcsine-square root confidence interval of the survival function
+plot(tonguefit,lwd=1,col=c("black","red","red"),cex.lab=1.3,cex.axis=1, conf.int = TRUE, conf.type= "arcsin", xlab = "Time", ylab = "Survival probability") ## with arcsin conf interval
+##Plots the EP-confidence band for the survival function
+epband<- km.ci(tonguefit, conf.level=0.95, tl=NA, tu=NA, method="logep")
+plot(epband, xlab="time", ylab="survival", mark.time=FALSE, lwd=1,col=c("black","red","red"),cex.lab=1.3,cex.axis=1) ## with epbands
+
+
